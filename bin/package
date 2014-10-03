@@ -1,0 +1,88 @@
+#!/usr/bin/ruby
+
+# A command line tool to drive the packaging repo
+#
+# Accepts the following arguments:
+#
+# [ --repo ] Path to a local github clone of the packaging repo-compatible project to package
+# [ --bundle ] Path to a local git-bundle of the packaging-repo compatible project to package
+# [ --remote-bundle ] The http URI to the git-bundle of the packaging-repo compatible project to package
+# [ --task ] The packaging repo task to execute
+# [ --version ] The version to package of the project. HEAD if not specified.
+
+require 'optparse'
+
+options = {}
+opt = OptionParser.new do |opts|
+  opts.banner = "\npackage: Simple command line tool for the packaging repo\n\nUsage: package [options]"
+  opts.separator ""
+  opts.separator "Options:"
+
+  opts.on("-r", "--repo REPO", "Path to a local github clone of the packaging repo-compatible project to package") do |repo|
+    options[:repo] = repo
+  end
+
+  opts.on("-b", "--bundle BUNDLE", "Path to a local git-bundle of the packaging-repo compatible project to package") do |bundle|
+    options[:bundle] = bundle
+  end
+
+  opts.on("-x", "--remote-bundle REMOTEBUNDLE", "URI to a git-bundle of the packaging-repo compatible project to download and package") do |remote_bundle|
+    options[:remote_bundle] = remote_bundle
+  end
+
+  opts.on("-t", "--task TASK [required]", "The packaging repo task to execute. Can be passed multiple times(ordered).") do |task|
+    if options[:tasks]
+      options[:tasks] << task
+    else
+      options[:tasks] = [task]
+    end
+  end
+
+  opts.on("-v", "--version VERSION", "The version to package of the project. Can be a git SHA or TAG. HEAD if not specified.") do |version|
+    options[:version] = version
+  end
+
+  # No argument, shows at tail.  This will print an options summary.
+  # Try it and see!
+  opts.on_tail("-h", "--help", "Show this message") do
+    puts opts
+    exit
+  end
+end
+
+opt.parse!
+
+if options.empty?
+  puts opt
+  exit
+end
+
+if !(options[:repo] or options[:bundle] or options[:remote_bundle])
+  puts "One of --repo | --bundle | --remote_bundle is required"
+  exit 1
+end
+
+if (options[:repo] and options[:bundle] and options[:remote_bundle])
+  puts "Only one of --repo | --bundle | --remote_bundle is allowed"
+  exit 1
+end
+
+if (options[:repo].nil? ^ options[:bundle].nil? ^ options[:remote_bundle].nil?)
+  puts "Only one of --repo | --bundle | --remote_bundle is allowed"
+  exit 1
+end
+
+if !options[:tasks]
+  puts "--task is required"
+  exit 1
+end
+
+require 'packagingcli'
+
+package = PackagingCLI.new
+options.each do |option, value|
+  package.instance_variable_set("@#{option}", value)
+end
+
+package.prep_task_environment
+package.execute_rake_tasks
